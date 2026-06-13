@@ -1,0 +1,7 @@
+# 1m datasets too large for LFS — generated on demand
+gist/1m/
+bioasq/1m/
+cohere/1m/
+
+# Raw downloads
+raw/
