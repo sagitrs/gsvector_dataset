@@ -22,8 +22,8 @@ TAR_FILE="wiki_all_1M.tar"
 
 # Idempotency check
 if [[ "${1:-}" != "--force" ]]; then
-    if [[ -f "$RAW_DIR/base.fbin" ]] && [[ -f "$RAW_DIR/query.fbin" ]] && \
-       [[ -f "$RAW_DIR/groundtruth.neighbors.ibin" ]]; then
+    if [[ -f "$RAW_DIR/base.1M.fbin" ]] && [[ -f "$RAW_DIR/queries.fbin" ]] && \
+       [[ -f "$RAW_DIR/groundtruth.1M.neighbors.ibin" ]]; then
         echo "[download_cohere] Raw files already exist, skipping. Use --force to re-download."
         exit 0
     fi
@@ -52,7 +52,7 @@ rm -f "$RAW_DIR/$TAR_FILE"
 echo "[download_cohere] Extracted to $RAW_DIR"
 
 # --- Verify raw files ---
-for f in base.fbin query.fbin groundtruth.neighbors.ibin; do
+for f in base.1M.fbin queries.fbin groundtruth.1M.neighbors.ibin; do
     if [[ ! -f "$RAW_DIR/$f" ]]; then
         echo "[download_cohere] ERROR: Missing extracted file: $f"
         ls -la "$RAW_DIR/"
@@ -66,8 +66,8 @@ PYTHON="${PYTHON:-python3}"
 CONVERTER="$SCRIPT_DIR/convert_fbin.py"
 echo "[download_cohere] Converting fbin → fvecs..."
 $PYTHON "$CONVERTER" \
-    --base "$RAW_DIR/base.fbin" \
-    --query "$RAW_DIR/query.fbin" \
+    --base "$RAW_DIR/base.1M.fbin" \
+    --query "$RAW_DIR/queries.fbin" \
     --out-dir "$RAW_DIR" || {
     echo "[download_cohere] ERROR: Conversion failed"
     exit 1
@@ -78,9 +78,9 @@ mv "$RAW_DIR/base.fvecs"  "$RAW_DIR/cohere_base.fvecs"
 mv "$RAW_DIR/query.fvecs" "$RAW_DIR/cohere_query.fvecs"
 
 # --- Clean up raw fbin files ---
-rm -f "$RAW_DIR/base.fbin" "$RAW_DIR/query.fbin" \
-      "$RAW_DIR/groundtruth.neighbors.ibin" \
-      "$RAW_DIR/groundtruth.distances.fbin"
+rm -f "$RAW_DIR/base.1M.fbin" "$RAW_DIR/queries.fbin" \
+      "$RAW_DIR/groundtruth.1M.neighbors.ibin" \
+      "$RAW_DIR/groundtruth.1M.distances.fbin"
 
 echo "[download_cohere] Done. Output files in $RAW_DIR:"
 ls -la "$RAW_DIR/"
