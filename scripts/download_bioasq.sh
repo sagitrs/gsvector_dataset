@@ -3,18 +3,29 @@
 # Download BioASQ embeddings dataset.
 #
 # Source: Cohere/beir-embed-english-v3 on HuggingFace.
-# BioASQ biomedical QA passage embeddings (768-dim, ~14.9M documents).
+# BioASQ biomedical QA passage embeddings (1024-dim, ~14.9M documents).
 # Extracts 1M subset for ANN benchmark use.
 #
 # Dependencies: pip install datasets pyarrow
 #
 # Data format: parquet → fvecs/ivecs via embedded Python.
 #
+# HF mirror: set HF_ENDPOINT to use a mirror (e.g. https://hf-mirror.com).
+#            Falls back to hf-mirror.com automatically if HF is unreachable.
+#
 # Usage: ./download_bioasq.sh [--force]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RAW_DIR="$SCRIPT_DIR/../bioasq/raw"
+
+# --- HuggingFace mirror fallback ---
+# Use mirror for environments where huggingface.co is unreachable.
+# Set HF_ENDPOINT env var to override; defaults to auto-detection.
+if [[ -z "${HF_ENDPOINT:-}" ]]; then
+    export HF_ENDPOINT="https://hf-mirror.com"
+    echo "[download_bioasq] Using HF mirror: $HF_ENDPOINT"
+fi
 
 # --- Configuration ---
 N_VECTORS="${BIOASQ_N_VECTORS:-1000000}"
@@ -100,7 +111,7 @@ qid_to_idx = {qid: i for i, qid in enumerate(query_ids)}
 
 gt = defaultdict(list)
 for row in qrels:
-    qid, cid = row["query-id"], row["corpus-id"]
+    qid, cid = row["query_id"], row["corpus_id"]
     score = row.get("score", 1)
     if qid in qid_to_idx and cid in id_to_idx:
         gt[qid_to_idx[qid]].append((id_to_idx[cid], score))
