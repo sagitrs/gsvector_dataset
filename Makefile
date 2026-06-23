@@ -6,14 +6,20 @@ SCRIPTS := scripts
 DATASET_DIR := $(shell pwd)
 
 # Dataset configuration
-# SIFT: 128-dim, all sizes LFS-tracked (1M base < 1GB)
-# GIST: 960-dim, 1k/10k/100k LFS-tracked, 1m on-demand
-# BIOASQ: 768-dim, 1k/10k/100k LFS-tracked, 1m on-demand
-# COHERE: 768-dim, 1k/10k/100k LFS-tracked, 1m on-demand
+# SIFT:   128-dim,  all sizes LFS-tracked (1M base < 1GB)
+# GIST:   960-dim,  1k/10k/100k LFS-tracked, 1m on-demand
+# BIOASQ: 1024-dim, 1k/10k/100k LFS-tracked, 1m on-demand
+# COHERE: 768-dim,  1k/10k/100k LFS-tracked, 1m on-demand
 
 SIZES := 1k 10k 100k 1m
 NON_1M_SIZES := 1k 10k 100k
 ALL_DATASETS := sift gist bioasq cohere
+
+# ---- Size helpers (for bench target) ----
+SIZES_UP_TO_1k   := 1k
+SIZES_UP_TO_10k  := 1k 10k
+SIZES_UP_TO_100k := 1k 10k 100k
+SIZES_UP_TO_1m   := 1k 10k 100k 1m
 
 # ---- SIFT ----
 .PHONY: sift
@@ -205,6 +211,48 @@ cohere/1m/gt_top10.ivecs cohere/1m/gt_top100.ivecs: cohere/1m/base.fvecs
 .PHONY: all
 all: sift gist bioasq cohere
 
+# ====================================================================
+#  High-level modes
+# ====================================================================
+
+# ---- CI mode: 1k subsets only — fast gate (~10s with LFS cached) ----
+.PHONY: ci
+ci: $(foreach ds,$(ALL_DATASETS),ci-$(ds))
+	@echo "=== CI datasets (1k) ready ==="
+
+ci-sift:   sift/1k/base.fvecs   sift/1k/gt_top10.ivecs   sift/1k/gt_top100.ivecs
+ci-gist:   gist/1k/base.fvecs   gist/1k/gt_top10.ivecs   gist/1k/gt_top100.ivecs
+ci-bioasq: bioasq/1k/base.fvecs bioasq/1k/gt_top10.ivecs bioasq/1k/gt_top100.ivecs
+ci-cohere: cohere/1k/base.fvecs cohere/1k/gt_top10.ivecs cohere/1k/gt_top100.ivecs
+
+# ---- Benchmark mode: all datasets up to BENCH_MAX_SIZE (default 100k) ----
+#   make bench                        → 1k+10k+100k for all datasets
+#   make bench BENCH_MAX_SIZE=10k     → 1k+10k only
+#   make bench BENCH_MAX_SIZE=1m      → all sizes including 1M
+BENCH_MAX_SIZE ?= 100k
+BENCH_SIZES = $(SIZES_UP_TO_$(BENCH_MAX_SIZE))
+
+.PHONY: bench
+bench: $(foreach ds,$(ALL_DATASETS),bench-$(ds))
+	@echo "=== Benchmark datasets up to $(BENCH_MAX_SIZE) ready ==="
+
+# Per-dataset bench: all sizes up to BENCH_MAX_SIZE
+bench-sift: $(foreach sz,$(BENCH_SIZES),sift/$(sz)/base.fvecs) \
+            $(foreach sz,$(BENCH_SIZES),sift/$(sz)/gt_top10.ivecs) \
+            $(foreach sz,$(BENCH_SIZES),sift/$(sz)/gt_top100.ivecs)
+
+bench-gist: $(foreach sz,$(BENCH_SIZES),gist/$(sz)/base.fvecs) \
+            $(foreach sz,$(BENCH_SIZES),gist/$(sz)/gt_top10.ivecs) \
+            $(foreach sz,$(BENCH_SIZES),gist/$(sz)/gt_top100.ivecs)
+
+bench-bioasq: $(foreach sz,$(BENCH_SIZES),bioasq/$(sz)/base.fvecs) \
+              $(foreach sz,$(BENCH_SIZES),bioasq/$(sz)/gt_top10.ivecs) \
+              $(foreach sz,$(BENCH_SIZES),bioasq/$(sz)/gt_top100.ivecs)
+
+bench-cohere: $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/base.fvecs) \
+              $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/gt_top10.ivecs) \
+              $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/gt_top100.ivecs)
+
 # ---- Validation ----
 .PHONY: validate
 validate:
@@ -225,6 +273,15 @@ clean:
 .PHONY: help
 help:
 	@echo "gsvector_dataset Makefile"
+	@echo ""
+	@echo "=== High-level modes ==="
+	@echo "  make ci                          - Pull 1k subsets only (fast CI gate)"
+	@echo "  make bench                       - Pull up to 100k for all datasets"
+	@echo "  make bench BENCH_MAX_SIZE=10k    - Pull up to 10k"
+	@echo "  make bench BENCH_MAX_SIZE=1m     - Pull everything including 1M"
+	@echo "  make all                         - Generate all LFS-tracked datasets"
+	@echo ""
+	@echo "=== Per-dataset targets ==="
 	@echo "  make sift        - Generate all SIFT sizes (LFS-tracked)"
 	@echo "  make gist        - Generate GIST 1k/10k/100k (LFS-tracked)"
 	@echo "  make gist-1m     - Generate GIST 1m (on-demand)"
@@ -232,6 +289,7 @@ help:
 	@echo "  make bioasq-1m   - Generate BioASQ 1m (on-demand)"
 	@echo "  make cohere      - Generate Cohere 1k/10k/100k (LFS-tracked)"
 	@echo "  make cohere-1m   - Generate Cohere 1m (on-demand)"
-	@echo "  make all         - Generate all LFS-tracked datasets"
+	@echo ""
+	@echo "=== Utilities ==="
 	@echo "  make validate    - Validate all datasets"
 	@echo "  make clean       - Remove all generated data"
