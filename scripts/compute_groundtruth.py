@@ -52,14 +52,15 @@ def write_ivecs(filepath, indices, k):
             f.write(indices[i].astype(np.int32).tobytes())
 
 
-def compute_groundtruth(base_vecs, query_vecs, k, batch_size=100):
+def compute_groundtruth(base_vecs, query_vecs, k, metric="L2", batch_size=100):
     """
-    Brute-force L2-squared nearest neighbors.
+    Brute-force nearest neighbors with specified distance metric.
 
     Args:
         base_vecs: (N, dim) float32 array
         query_vecs: (Q, dim) float32 array
         k: number of nearest neighbors
+        metric: "L2", "IP", or "COSINE"
         batch_size: number of queries per batch (for memory)
 
     Returns:
@@ -68,21 +69,35 @@ def compute_groundtruth(base_vecs, query_vecs, k, batch_size=100):
     Q = query_vecs.shape[0]
     all_indices = np.zeros((Q, k), dtype=np.int32)
 
+    base_f64 = base_vecs.astype(np.float64)
+    base_norms = np.sum(base_f64 ** 2, axis=1)
+
     # Process queries in batches
     for start in range(0, Q, batch_size):
         end = min(start + batch_size, Q)
-        batch = query_vecs[start:end]
+        batch = query_vecs[start:end].astype(np.float64)
+        dots = np.dot(batch, base_f64.T)
 
-        # L2^2 = ||x||^2 + ||y||^2 - 2*x·y
-        base_norms = np.sum(base_vecs.astype(np.float64) ** 2, axis=1)
-        query_norms = np.sum(batch.astype(np.float64) ** 2, axis=1)
-        dots = np.dot(batch.astype(np.float64), base_vecs.astype(np.float64).T)
-        dists = query_norms[:, np.newaxis] + base_norms[np.newaxis, :] - 2 * dots
+        if metric == "L2":
+            query_norms = np.sum(batch ** 2, axis=1)
+            dists = query_norms[:, np.newaxis] + base_norms[np.newaxis, :] - 2 * dots
+            order = np.argsort  # smaller = closer
+        elif metric == "IP":
+            dists = -dots  # larger dot = more similar
+            order = np.argsort  # sort negative dots ascending
+        elif metric == "COSINE":
+            query_norms = np.sqrt(np.sum(batch ** 2, axis=1))
+            base_norms_sqrt = np.sqrt(base_norms)
+            norms = np.maximum(query_norms[:, np.newaxis] * base_norms_sqrt[np.newaxis, :], 1e-12)
+            dists = 1.0 - dots / norms
+            order = np.argsort  # smaller = more similar
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
 
-        # Find top-k smallest distances
+        # Find top-k
         for j in range(end - start):
             part = np.argpartition(dists[j], k)[:k]
-            part = part[np.argsort(dists[j][part])]
+            part = part[order(dists[j][part])]
             all_indices[start + j] = part.astype(np.int32)
 
         print(f"  [gt] batch {start // batch_size + 1}/"
@@ -109,6 +124,8 @@ def main():
     parser.add_argument("--out-dir", required=True, help="Output directory")
     parser.add_argument("--batch-size", type=int, default=100,
                         help="Queries per batch (default: 100)")
+    parser.add_argument("--metric", default="L2", choices=["L2", "IP", "COSINE"],
+                        help="Distance metric (default: L2)")
     args = parser.parse_args()
 
     ks = [int(x.strip()) for x in args.k.split(",")]
@@ -132,14 +149,15 @@ def main():
     for k in ks:
         print(f"[gt] Computing top-{k}...")
         t0 = time.time()
-        indices = compute_groundtruth(base, query, k, batch_size=args.batch_size)
+        indices = compute_groundtruth(base, query, k, metric=args.metric, batch_size=args.batch_size)
         elapsed = time.time() - t0
         print(f"[gt] top-{k} done in {elapsed:.1f}s "
               f"({elapsed / Q * 1000:.1f} ms/query)")
 
         validate_ivecs(indices, k, N)
 
-        out_path = os.path.join(args.out_dir, f"gt_top{k}.ivecs")
+        suffix = f"_{args.metric.lower()}" if args.metric != "L2" else ""
+        out_path = os.path.join(args.out_dir, f"gt_top{k}{suffix}.ivecs")
         write_ivecs(out_path, indices, k)
         print(f"[gt] Written: {out_path} ({os.path.getsize(out_path)} bytes)")
 
