@@ -253,6 +253,43 @@ bench-cohere: $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/base.fvecs) \
               $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/gt_top10.ivecs) \
               $(foreach sz,$(BENCH_SIZES),cohere/$(sz)/gt_top100.ivecs)
 
+# ---- CSV format (gsvector-pg) ----
+.PHONY: csv
+csv: $(foreach ds,$(ALL_DATASETS),csv-$(ds))
+	@echo "=== CSV datasets ready ==="
+
+csv-sift:   $(foreach sz,$(NON_1M_SIZES),sift/$(sz)/base.csv   sift/$(sz)/query.csv)
+csv-gist:   $(foreach sz,$(NON_1M_SIZES),gist/$(sz)/base.csv   gist/$(sz)/query.csv)
+csv-bioasq: $(foreach sz,$(NON_1M_SIZES),bioasq/$(sz)/base.csv bioasq/$(sz)/query.csv)
+csv-cohere: $(foreach sz,$(NON_1M_SIZES),cohere/$(sz)/base.csv cohere/$(sz)/query.csv)
+
+# Pattern rule: fvecs → CSV
+%/base.csv: %/base.fvecs scripts/fvecs2csv.py
+	$(PYTHON) scripts/fvecs2csv.py $< $@
+
+%/query.csv: %/query.fvecs scripts/fvecs2csv.py
+	$(PYTHON) scripts/fvecs2csv.py $< $@
+
+# ---- Iceberg format (gsiceberg) ----
+PHONY: iceberg
+iceberg: $(foreach ds,$(ALL_DATASETS),iceberg-$(ds))
+	@echo "=== Iceberg datasets ready ==="
+
+iceberg-sift:   $(foreach sz,$(NON_1M_SIZES),sift/$(sz)/iceberg/metadata/metadata.json)
+iceberg-gist:   $(foreach sz,$(NON_1M_SIZES),gist/$(sz)/iceberg/metadata/metadata.json)
+iceberg-bioasq: $(foreach sz,$(NON_1M_SIZES),bioasq/$(sz)/iceberg/metadata/metadata.json)
+iceberg-cohere: $(foreach sz,$(NON_1M_SIZES),cohere/$(sz)/iceberg/metadata/metadata.json)
+
+# Pattern rule: fvecs → Iceberg table
+%/iceberg/metadata/metadata.json: %/base.fvecs scripts/fvecs2iceberg.py
+	$(PYTHON) scripts/fvecs2iceberg.py \
+		--base $< --query $*/query.fvecs --out-dir $*
+
+# ---- All formats ----
+.PHONY: all-formats
+all-formats: fvecs csv iceberg
+	@echo "=== all-formats ready ==="
+
 # ---- Validation ----
 .PHONY: validate
 validate:
