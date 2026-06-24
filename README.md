@@ -30,7 +30,31 @@ bioasq/  (same as gist)
 cohere/  (same as gist)
 ```
 
-## File Formats
+## Formats
+
+| Format | Files | Consumer | `make` target |
+|--------|-------|----------|:--:|
+| `.fvecs` / `.ivecs` | `base.fvecs`, `query.fvecs`, `gt_top*.ivecs` | gsvector C++, Python | `make fvecs` |
+| `.csv` | `base.csv`, `query.csv` | gsvector-pg (PG COPY) | `make csv` |
+| Iceberg | `iceberg/data/*.parquet` + `metadata/` | gsiceberg (FDW) | `make iceberg` |
+
+### CLI: `get.py`
+
+```bash
+python3 scripts/get.py sift 1k              # list available formats
+python3 scripts/get.py sift 1k csv          # → base.csv, query.csv paths
+python3 scripts/get.py gist 10k fvecs --gt top10  # fvecs + ground truth
+python3 scripts/get.py sift 1k iceberg --json     # JSON for scripts
+```
+
+## Quick Start
+
+```bash
+make ci              # 1k fvecs for CI
+make csv             # CSV for gsvector-pg
+make iceberg         # Iceberg for gsiceberg
+make all-formats     # everything
+```
 
 ### fvecs (float vectors)
 ```
